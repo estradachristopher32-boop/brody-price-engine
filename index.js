@@ -20,7 +20,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const api = `https://financialmodelingprep.com/api/v3/quote/${ticker}?apikey=1ONwoPgaocrU7kAjRuMFBNfuIwk1nfR2`;
+      const api = `https://financialmodelingprep.com/api/v3/quote-short/${ticker}?apikey=${1ONwoPgaocrU7kAjRuMFBNfuIwk1nfR2}`;
 
       console.log("Fetching:", api);
 
@@ -43,13 +43,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({
         ticker,
         price: q.price,
-        open: q.open,
-        high: q.dayHigh,
-        low: q.dayLow,
-        prevClose: q.previousClose,
         volume: q.volume,
-        change: q.change,
-        changePct: q.changesPercentage
       }, null, 2));
 
     } catch (err) {
