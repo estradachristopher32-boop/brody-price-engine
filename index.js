@@ -10,9 +10,9 @@ const server = http.createServer(async (req, res) => {
     return res.end("Brody Price Engine is online");
   }
 
-  // Price endpoint: /price?ticker=NVDA
+    // Price endpoint: /price?ticker=NVDA
   if (url.pathname === "/price") {
-    const ticker = url.searchParams.get("ticker");
+    const ticker = (url.searchParams.get("ticker") || "").toUpperCase();
 
     if (!ticker) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -20,30 +20,40 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      // Free reliable API
       const api = `https://financialmodelingprep.com/api/v3/quote/${ticker}?apikey=demo`;
-      const response = await fetch(api);
-      const data = await response.json();
 
-      if (!data || !data[0]) {
-        throw new Error("Invalid API response");
+      console.log("Fetching:", api);
+
+      const response = await fetch(api);
+      const json = await response.json();
+
+      console.log("FMP raw response:", json);
+
+      if (!Array.isArray(json) || json.length === 0) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({
+          error: "Invalid API response",
+          response: json
+        }));
       }
 
-      const quote = data[0];
+      const q = json[0];
 
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({
         ticker,
-        price: quote.price,
-        open: quote.open,
-        high: quote.dayHigh,
-        low: quote.dayLow,
-        prevClose: quote.previousClose,
-        volume: quote.volume,
-        change: quote.change,
-        changePct: quote.changesPercentage
+        price: q.price,
+        open: q.open,
+        high: q.dayHigh,
+        low: q.dayLow,
+        prevClose: q.previousClose,
+        volume: q.volume,
+        change: q.change,
+        changePct: q.changesPercentage
       }, null, 2));
+
     } catch (err) {
+      console.error("ERROR:", err);
       res.writeHead(500, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ error: err.message }));
     }
