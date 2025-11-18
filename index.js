@@ -20,7 +20,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const api = `https://financialmodelingprep.com/api/v3/quote/${ticker}?apikey=demo`;
+      const api = `https://financialmodelingprep.com/api/v3/quote/${ticker}?apikey=1ONwoPgaocrU7kAjRuMFBNfuIwk1nfR2`;
 
       console.log("Fetching:", api);
 
