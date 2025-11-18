@@ -21,7 +21,14 @@ if (url.pathname === "/price") {
 
   try {
     const api = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`;
-    const response = await fetch(api);
+
+    const response = await fetch(api, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; BrodyBot/1.0)",
+        "Accept": "application/json"
+      }
+    });
+
     const json = await response.json();
 
     const q = json?.quoteResponse?.result?.[0];
