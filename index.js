@@ -45,6 +45,44 @@ app.get("/price", async (req, res) => {
   }
 });
 
+// --- 1M OHLC ---
+app.get("/ohlc1m", async (req, res) => {
+  const ticker = req.query.t;
+  if (!ticker) return res.status(400).json({ error: "Missing ?t=" });
+
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=${ticker.toUpperCase()}&interval=1min&outputsize=100&apikey=${API_KEY}`;
+    const r = await axios.get(url);
+
+    if (!r.data || r.data.code) {
+      return res.status(500).json({ error: r.data.message || "API error" });
+    }
+
+    res.json(r.data.values);  // array of candles
+  } catch (e) {
+    res.status(500).json({ error: "Fail", details: e.message });
+  }
+});
+
+// --- 5M OHLC ---
+app.get("/ohlc5m", async (req, res) => {
+  const ticker = req.query.t;
+  if (!ticker) return res.status(400).json({ error: "Missing ?t=" });
+
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=${ticker.toUpperCase()}&interval=5min&outputsize=100&apikey=${API_KEY}`;
+    const r = await axios.get(url);
+
+    if (!r.data || r.data.code) {
+      return res.status(500).json({ error: r.data.message || "API error" });
+    }
+
+    res.json(r.data.values);
+  } catch (e) {
+    res.status(500).json({ error: "Fail", details: e.message });
+  }
+});
+
 // ROOT ENDPOINT
 app.get("/", (req, res) => {
   res.send("Brody Price Engine Online — TwelveData Version");
