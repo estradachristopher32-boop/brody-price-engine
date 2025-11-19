@@ -1,64 +1,49 @@
-import fetch from "node-fetch";
-import http from "http";
+import express from "express";
+import axios from "axios";
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+const app = express();
 
-  // Home page
-  if (url.pathname === "/") {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    return res.end("Brody Price Engine is online");
-  }
+// You can replace with your own API key later.
+// Using FinancialModelingPrep demo key for now.
+const API = "https://financialmodelingprep.com/api/v3/quote";
 
-// Price endpoint: /price?ticker=AAPL
-if (url.pathname === "/price") {
-  const ticker = url.searchParams.get("ticker");
+app.get("/price", async (req, res) => {
+  const ticker = req.query.t;
 
   if (!ticker) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ error: "No ticker provided" }));
+    return res.status(400).json({ error: "Missing ?t=TICKER parameter" });
   }
 
   try {
-    const api = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`;
+    const url = `${API}/${ticker.toUpperCase()}?apikey=demo`;
+    const response = await axios.get(url);
 
-    const response = await fetch(api, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; BrodyBot/1.0)",
-        "Accept": "application/json"
-      }
+    if (!response.data || !response.data[0]) {
+      return res.status(404).json({ error: "Ticker not found or API error" });
+    }
+
+    const q = response.data[0];
+
+    res.json({
+      ticker: ticker.toUpperCase(),
+      price: q.price,
+      open: q.open,
+      high: q.dayHigh,
+      low: q.dayLow,
+      prevClose: q.previousClose,
+      volume: q.volume,
+      change: q.change,
+      changePct: q.changesPercentage
     });
 
-    const json = await response.json();
-
-    const q = json?.quoteResponse?.result?.[0];
-    if (!q) throw new Error("Invalid Yahoo Finance response");
-
-    res.writeHead(200, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({
-      ticker,
-      price: q.regularMarketPrice,
-      open: q.regularMarketOpen,
-      high: q.regularMarketDayHigh,
-      low: q.regularMarketDayLow,
-      prevClose: q.regularMarketPreviousClose,
-      volume: q.regularMarketVolume,
-      change: q.regularMarketChange,
-      changePct: q.regularMarketChangePercent
-    }, null, 2));
-
   } catch (err) {
-    res.writeHead(500, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ error: err.message }));
+    res.status(500).json({ error: "Internal request failed", details: err.message });
   }
-}
-
-  // 404 fallback
-  res.writeHead(404, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ error: "Not found" }));
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
+app.get("/", (req, res) => {
+  res.send("Brody Price Engine Online");
 });
+
+const port = process.env.PORT || 10000;
+app.listen(port, () => console.log("Server running on port " + port));
