@@ -6,102 +6,101 @@ const app = express();
 app.use(cors());
 const API_KEY = process.env.TWELVEDATA_KEY; // stored securely on Render
 
-// PRICE ENDPOINT — real-time quote
-app.get("/price", async (req, res) => {
-  const ticker = req.query.t;
 
-  if (!ticker) {
-    return res.status(400).json({ error: "Missing ?t=SYMBOL parameter" });
-  }
+import express from "express";
+import cors from "cors";
+import { getCGPrice, getCGOHLC } from "./services/coingecko.js";
+import { computeFVG } from "./services/fvg.js";
+import { computeLSR } from "./services/lsr.js";
+import { computeWyckoff } from "./services/wyckoff.js";
 
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Price Endpoint
+app.get("/getPrice", async (req, res) => {
   try {
-    const url = `https://api.twelvedata.com/quote?symbol=${ticker.toUpperCase()}&apikey=${API_KEY}`;
-    const response = await axios.get(url);
-
-    if (!response.data || response.data.code) {
-      return res.status(500).json({
-        error: "API error",
-        details: response.data.message || "No data returned"
-      });
-    }
-
-    const q = response.data;
-
-    return res.json({
-      ticker: ticker.toUpperCase(),
-      price: q.price,
-      open: q.open,
-      high: q.high,
-      low: q.low,
-      prevClose: q.previous_close,
-      volume: q.volume,
-      change: q.percent_change,
-      changePct: q.percent_change
-    });
-
+    const symbol = req.query.symbol?.toLowerCase();
+    const price = await getCGPrice(symbol);
+    res.json(price);
   } catch (err) {
-    return res.status(500).json({
-      error: "Internal request failed",
-      details: err.message
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// OHLC Endpoint
+app.get("/getOHLC", async (req, res) => {
+  try {
+    const symbol = req.query.symbol?.toLowerCase();
+    const interval = req.query.interval || "1h";
+    const data = await getCGOHLC(symbol, interval);
+    res.json({ symbol, interval, candles: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// FVG Detection
+app.get("/getFVG", async (req, res) => {
+  try {
+    const symbol = req.query.symbol?.toLowerCase();
+    const candles = await getCGOHLC(symbol, "1h");
+    const fvg = computeFVG(candles);
+    res.json({ count: fvg.length, fvg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// LSR Detection
+app.get("/getLSR", async (req, res) => {
+  try {
+    const symbol = req.query.symbol?.toLowerCase();
+    const candles = await getCGOHLC(symbol, "1h");
+    const lsr = computeLSR(candles);
+    res.json({ count: lsr.length, lsr });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Wyckoff Microstructure
+app.get("/getWyckoff", async (req, res) => {
+  try {
+    const symbol = req.query.symbol?.toLowerCase();
+    const candles = await getCGOHLC(symbol, "1h");
+    const state = computeWyckoff(candles);
+    res.json({ state });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Composite Signal
+app.get("/getAllSignals", async (req, res) => {
+  try {
+    const symbol = req.query.symbol?.toLowerCase();
+    const candles = await getCGOHLC(symbol, "1h");
+    const price = await getCGPrice(symbol);
+    const fvg = computeFVG(candles);
+    const lsr = computeLSR(candles);
+    const wyck = computeWyckoff(candles);
+    res.json({
+      symbol,
+      price,
+      fvgCount: fvg.length,
+      lsrCount: lsr.length,
+      wyckoffState: wyck,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-// --- 1M OHLC ---
-app.get("/ohlc1m", async (req, res) => {
-  const ticker = req.query.t;
-  if (!ticker) return res.status(400).json({ error: "Missing ?t=" });
-
-  try {
-    const url = `https://api.twelvedata.com/time_series?symbol=${ticker.toUpperCase()}&interval=1min&outputsize=100&apikey=${API_KEY}`;
-    const r = await axios.get(url);
-
-    if (!r.data || r.data.code) {
-      return res.status(500).json({ error: r.data.message || "API error" });
-    }
-
-    res.json(r.data.values);  // array of candles
-  } catch (e) {
-    res.status(500).json({ error: "Fail", details: e.message });
-  }
-});
-
-// --- 5M OHLC ---
-app.get("/ohlc5m", async (req, res) => {
-  const ticker = req.query.t;
-  if (!ticker) return res.status(400).json({ error: "Missing ?t=" });
-
-  try {
-    const url = `https://api.twelvedata.com/time_series?symbol=${ticker.toUpperCase()}&interval=5min&outputsize=100&apikey=${API_KEY}`;
-    const r = await axios.get(url);
-
-    if (!r.data || r.data.code) {
-      return res.status(500).json({ error: r.data.message || "API error" });
-    }
-
-    res.json(r.data.values);
-  } catch (e) {
-    res.status(500).json({ error: "Fail", details: e.message });
-  }
-});
-
-function detectFVG(candles) {
-  const fvgList = [];
-
-  for (let i = 2; i < candles.length; i++) {
-    const c0 = candles[i - 2];
-    const c1 = candles[i - 1];
-    const c2 = candles[i];
-
-    const high0 = parseFloat(c0.high);
-    const low1 = parseFloat(c1.low);
-    const high1 = parseFloat(c1.high);
-    const low2 = parseFloat(c2.low);
-
-    // Bullish FVG
-    if (low1 > high0) {
-      fvgList.push({
-        type: "bull",
+// Start App
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Brody Engine running on port ${PORT}`));
         start: high0,
         end: low1,
         index: i - 1
